@@ -1,13 +1,17 @@
 package com.example.parteek.sunaamilist;
 
 import android.app.ProgressDialog;
+import android.content.Intent;
 import android.os.AsyncTask;
 import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
-import android.widget.ArrayAdapter;
+import android.view.View;
+import android.view.WindowManager;
+import android.widget.AdapterView;
 import android.widget.ListView;
+import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -22,39 +26,54 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
-// This ACtivity Was Used for Retereiving single data from Json Without any Custom Adapter,
-// So id made The Second activity and reterive multiple vakues using Json
-public class MainActivity extends AppCompatActivity {
+
+public class Main2Activity extends AppCompatActivity implements AdapterView.OnItemClickListener {
 
     ListView listView;
-    ArrayAdapter<String> adapter;
+    CustomAdapter adapter;
     public static final String LOG_TAG = MainActivity.class.getSimpleName();
-    ArrayList<String > arrayList;
+    ArrayList<Event > arrayList;
     ProgressDialog progressDialog;
     Handler handler;
     private static final String USGS_REQUEST_URL =
-            "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=2016-01-01&endtime=2016-01-31&minmagnitude=6&limit=15";
+            "https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=2016-01-01&endtime=2016-01-31&&limit=15";
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.activity_main2);
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);
         handler=new Handler();
         progressDialog=new ProgressDialog(this);
-        listView=(ListView)findViewById(R.id.list_item);
+        progressDialog.setCancelable(false);
+        progressDialog.setMessage("Reterieving Data");
+        listView=(ListView)findViewById(R.id.list_item1);
         arrayList=new ArrayList<>();
-        adapter=new ArrayAdapter<String>(this,android.R.layout.simple_list_item_1,arrayList);
+        adapter=new CustomAdapter(this,R.layout.raw,arrayList);
         listView.setAdapter(adapter);
+        listView.setOnItemClickListener(this);
         MyTask myTask=new MyTask();
         myTask.execute();
     }
-    public class MyTask extends AsyncTask<URL,String,ArrayList>{
-        ArrayAdapter<String> arrayAdapter;
-        ArrayList<String> arrayList2;
+
+    @Override
+    public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
+        Event event=arrayList.get(i);
+        Toast.makeText(this, ""+event.getTitle(), Toast.LENGTH_SHORT).show();
+        Intent intent=new Intent(this,WebViewActivity.class);
+        intent.putExtra("url",event.getUrl());
+        startActivity(intent);
+        overridePendingTransition(R.anim.side_out_left,R.anim.side_in_right);
+    }
+
+
+    public class MyTask extends AsyncTask<URL,ArrayList<Event>,ArrayList>{
+        CustomAdapter adapter;
+        ArrayList<Event> arrayList2;
         String[] list;
         @Override
         protected void onPreExecute() {
             progressDialog.show();
-            arrayAdapter=(ArrayAdapter)listView.getAdapter();
+            adapter=(CustomAdapter) listView.getAdapter();
         }
 
         @Override
@@ -63,18 +82,18 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @Override
-        protected ArrayList<String> doInBackground(URL... urls) {
+        protected ArrayList<Event> doInBackground(URL... urls) {
 
-                URL url=crateUrl(USGS_REQUEST_URL);
-                String response="";
+            URL url=crateUrl(USGS_REQUEST_URL);
+            String response="";
             try {
                 response=makeHttpRequest(url);
             } catch (IOException e) {
                 e.printStackTrace();
             }
             arrayList2=extractFeatureFromJson(response);
-            list=arrayList2.toArray(new String[arrayList2.size()]);
-            publishProgress(list);
+            // list=arrayList2.toArray(new String[arrayList2.size()]);
+            publishProgress(arrayList2);
 //            MainActivity.this.runOnUiThread(new Runnable() {
 //                @Override
 //                public void run() {
@@ -82,14 +101,17 @@ public class MainActivity extends AppCompatActivity {
 //                    Log.e("Yaa", String.valueOf(arrayList));
 //                }
 //            });
-            return arrayList;
+            return arrayList2;
         }
 
         @Override
-        protected void onProgressUpdate(String[] values) {
-            for (int i=0;i<values.length;i++) {
-                arrayAdapter.add(values[i]);
+        protected void onProgressUpdate(ArrayList[] values) {
+
+            for (Event event: arrayList2) {
+                //Event event=arrayList2.get(i);
+                adapter.add(event);
             }
+            //  adapter.add(arrayList2);
         }
 
         private URL crateUrl(String stringUrl){
@@ -140,8 +162,8 @@ public class MainActivity extends AppCompatActivity {
             }
             return output.toString();
         }
-        private ArrayList<String> extractFeatureFromJson(String earthquakeJSON) {
-            ArrayList<String> arrayList1=new ArrayList<>();
+        private ArrayList<Event> extractFeatureFromJson(String earthquakeJSON) {
+            arrayList=new ArrayList<>();
             try {
                 JSONObject baseJsonResponse = new JSONObject(earthquakeJSON);
                 JSONArray featureArray = baseJsonResponse.getJSONArray("features");
@@ -154,14 +176,17 @@ public class MainActivity extends AppCompatActivity {
 
                     // Extract out the title, time, and tsunami values
                     String title = properties.getString("place");
-                    arrayList1.add(title);
+                    double mag=properties.getDouble("mag");
+                    long time=properties.optLong("time");
+                    String url=properties.getString("url");
+                    arrayList.add(new Event(title,mag,time,url));
                     // Create a new {@link Event} object
 
                 }
             } catch (JSONException e) {
                 Log.e(LOG_TAG, "Problem parsing the earthquake JSON results", e);
             }
-            return arrayList1;
+            return arrayList;
         }
     }
 }
